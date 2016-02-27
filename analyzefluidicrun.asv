@@ -1,0 +1,100 @@
+function [g]=analyzeGHKrun(fileandpath)
+% analyzes a single fluidiz run, typically over a single zap for two IV
+% curves per salt solution
+%fileandpath are structs with the data
+
+% if no file data input
+if nargin==0
+    % get ABF files to operate on
+    [filenameABF, pathnameABF] = uigetfile({'*.abf','.abf files'},...
+        'Pick IV curve ABF','p:\public\Operation White Anvil\Analysis\ZappingConductance\MATLAB\GHKfit',... 
+        'MultiSelect', 'on');
+    % get parameters
+    [filenameParams, pathnameParams] = uigetfile({'*.mat','.mat files'},...
+        'Pick the Gbulk file','p:\public\Operation White Anvil\Analysis\ZappingConductance\MATLAB\GHKfit',... 
+        'MultiSelect', 'off');
+    % get porename, and some other info
+    prompt = {'Pore name',...
+              'Data page and book number',...
+              'Comments'};
+    dlg_title = 'Input';
+    num_lines = 1;
+    def = {'','',''};
+    answer = inputdlg(prompt,dlg_title,num_lines,def);
+else
+    filenameABF = fileandpath.filenameABF;
+    pathnameABF = fileandpath.pathnameABF;
+    filenameParams = fileandpath.filenameParams;
+    pathnameParams = fileandpath.pathnameParams;
+    answer = fileandpath.answer;
+end
+
+% and sort them 
+filenameABF=sortrows(filenameABF');    
+    
+% get number of files
+numFiles=length(filenameABF);
+
+%clear csummary cneg_pos cpos_neg Vssummary Issummary
+%open up some memory
+csummary    = zeros(numFiles,2);
+cneg_pos    = zeros(numFiles,1);
+cpos_neg    = zeros(numFiles,1);
+Vssummary   = [];%zeros(numFiles,1);
+Issummary   = [];%zeros(numFiles,1);
+Irawsummary = [];%zeros(numFiles,1);
+cmean=[];
+
+%load params file and create object to extract Gbulk from mat file
+m = matfile([ pathnameParams filenameParams ]);
+
+for i=1:numFiles
+    %find range to fit over
+    % p.minVfit,p.maxVfit
+% p.minVfit,p.maxVfit
+% p.minV,p.maxV
+
+    p.minVfit = m.ivrange(1,1);
+    p.maxVfit = m.ivrange(1,2);
+    [Vs, Is, filename, d]=extract_iv_GHK([pathnameABF filenameABF{i,1}],p);
+    
+    
+    %Now for some fitting!
+    fitresults = fitGHK(Vs,concCis,concTrans,c);
+    
+
+    
+    
+
+    Vssummary   = [Vssummary   ; Vs];
+    Issummary   = [Issummary   ; Is];
+%     Irawsummary = [Irawsummary ; Iraw];
+end
+%coeff1 is the slope, which is conductance, so calling it gxxxx
+gmean=cmean';
+
+
+%making things pretty and crude output to screen for inspection
+m.tags
+gneg_pos_pretty = round(reshape(cneg_pos,[2,floor(length(cneg_pos)/2)]),2)
+gmean_pretty    = round(cmean',2)
+%calculate gnorm, assumes 4th run is the normalization run
+gnorm=gmean/gmean(m.normMethod)./(m.Gbulk/m.Gbulk(1,m.normMethod));
+%note: normmethod is index of normalization run
+
+%save data for export
+g.Vs    = Vssummary;
+g.Is    = Issummary;
+g.filenames = filenameABF;
+g.gmean = gmean;
+g.gnorm = gnorm;
+g.gknorm= gmean(m.normMethod);
+g.Gbulk = m.Gbulk;
+g.tags  = m.tags;
+g.normMethod = m.normMethod;
+g.numSalt = size(m.tags,2);%nice to have
+g.porename = answer(1);
+g.page     = answer(2);
+g.comments = answer(3);
+
+
